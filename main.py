@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 
 # ==============================================================================
-# 0. 資料庫初始化模組
+# 0. 資料庫初始化模組 (自動升級欄位)
 # ==============================================================================
 DB_FILE = "lanyang_food_hazard.db"
 
@@ -30,9 +30,20 @@ def init_db():
         sig_owner TEXT,
         sig_supervisor TEXT,
         sig_safety TEXT,
-        status TEXT
+        status TEXT,
+        work_start_date TEXT,
+        work_end_date TEXT
     )
     """)
+    
+    # 檢查並動態補齊欄位 (針對舊資料庫自動升級)
+    cursor.execute("PRAGMA table_info(vendor_records)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "work_start_date" not in columns:
+        cursor.execute("ALTER TABLE vendor_records ADD COLUMN work_start_date TEXT")
+    if "work_end_date" not in columns:
+        cursor.execute("ALTER TABLE vendor_records ADD COLUMN work_end_date TEXT")
+
     conn.commit()
     conn.close()
 
@@ -51,6 +62,8 @@ class SubmitFormRequest(BaseModel):
     contractor_name: str
     owner_name: str
     sig_owner: str
+    work_start_date: str
+    work_end_date: str
 
 class ApproveFormRequest(BaseModel):
     record_id: str
@@ -63,6 +76,8 @@ class UpdateFormRequest(BaseModel):
     contractor_name: str
     project_name: str
     project_location: str
+    work_start_date: str
+    work_end_date: str
 
 FOOD_HAZARD_RULES_DB = {
     "廠區通用安全與食品衛生守則": [
@@ -118,6 +133,8 @@ def get_vendor_entry_page():
             rules_html += f"<li>{r}</li>"
         rules_html += "</ul>"
 
+    today_str = time.strftime("%Y-%m-%d")
+
     return f"""
     <!DOCTYPE html>
     <html>
@@ -138,8 +155,10 @@ def get_vendor_entry_page():
             .sig-box {{ border: 2px dashed #28a745; border-radius: 8px; height: 180px; background: #fff; margin-top: 5px; touch-action: none; }}
             canvas {{ width: 100%; height: 100%; }}
             .form-group {{ margin-top: 12px; }}
+            .date-group {{ display: flex; gap: 10px; }}
+            .date-group > div {{ flex: 1; }}
             label {{ display: block; font-weight: bold; margin-bottom: 4px; font-size: 13px; }}
-            input[type="text"], input[type="number"] {{ width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }}
+            input[type="text"], input[type="number"], input[type="date"] {{ width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }}
             button {{ padding: 12px; font-size: 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; }}
             .submit-btn {{ background: #28a745; color: white; margin-top: 20px; }}
             .clear-btn {{ background: #6c757d; color: white; padding: 6px 12px; font-size: 12px; margin-top: 6px; float: left; width: auto; border-radius: 4px; }}
@@ -151,11 +170,24 @@ def get_vendor_entry_page():
         <div class="box">
             <h2>蘭揚食品危害告知書</h2>
             
-            <div class="section-title">一、請填寫本日進廠施工資訊</div>
+            <div class="section-title">一、請填寫進廠施工與工期資訊</div>
             <div class="form-group"><label>發包單位/人員 *</label><input type="text" id="issuing_unit" placeholder="例如：總務部 / 王小明"></div>
             <div class="form-group"><label>承攬廠商名稱 *</label><input type="text" id="contractor_name" placeholder="例如：大安工程有限公司"></div>
             <div class="form-group"><label>施工作業名稱 *</label><input type="text" id="project_name" placeholder="例如：A區冷凍庫風扇維修"></div>
             <div class="form-group"><label>施工地點 / 車間 *</label><input type="text" id="project_location" placeholder="例如：B棟 2樓 充填室"></div>
+            
+            <!-- 工期選擇器 -->
+            <div class="form-group date-group">
+                <div>
+                    <label>作業起始日期 *</label>
+                    <input type="date" id="work_start_date" value="{today_str}">
+                </div>
+                <div>
+                    <label>作業結束日期 *</label>
+                    <input type="date" id="work_end_date" value="{today_str}">
+                </div>
+            </div>
+
             <div class="form-group"><label>作業人數 (人) *</label><input type="number" id="worker_count" min="1" value="1"></div>
 
             <div class="section-title">二、廠區潛在危害因素告知</div>
@@ -166,7 +198,7 @@ def get_vendor_entry_page():
             
             <div class="chk-item" style="background:#e8f4f8; margin-top:8px; border-radius:6px;">
                 <input type="checkbox" id="chk_promise">
-                <label for="chk_promise"><b>我已詳閱職業安全與食品衛生(GHP)防範對策（含嚴禁菸酒、檳榔及違禁品聲明），並承諾恪守規定，若造成人員傷害或食品污染願負完全責任。</b></label>
+                <label for="chk_promise"><b>我已詳閱職業安全與食品衛生(GHP)防範對策（含嚴禁菸酒、檳榔及違禁品聲明），並承諾於上述作業期間內恪守規定，若造成人員傷害或食品污染願負完全責任。</b></label>
             </div>
 
             <div class="section-title" style="background:#007bff;">四、進場人員手寫簽章</div>
@@ -206,9 +238,15 @@ def get_vendor_entry_page():
                 const project = document.getElementById('project_name').value.trim();
                 const location = document.getElementById('project_location').value.trim();
                 const owner = document.getElementById('owner_name').value.trim();
+                const startDate = document.getElementById('work_start_date').value;
+                const endDate = document.getElementById('work_end_date').value;
 
-                if (!issuingUnit || !contractor || !project || !location || !owner || workerCount <= 0) {{
-                    alert('請完整填寫各項資訊！');
+                if (!issuingUnit || !contractor || !project || !location || !owner || !startDate || !endDate || workerCount <= 0) {{
+                    alert('請完整填寫各項資訊與作業期間！');
+                    return;
+                }}
+                if (startDate > endDate) {{
+                    alert('作業起始日期不能大於結束日期！');
                     return;
                 }}
                 if (!document.getElementById('chk_promise').checked) {{
@@ -230,7 +268,9 @@ def get_vendor_entry_page():
                         project_location: location,
                         contractor_name: contractor,
                         owner_name: owner,
-                        sig_owner: padOwner.toDataURL()
+                        sig_owner: padOwner.toDataURL(),
+                        work_start_date: startDate,
+                        work_end_date: endDate
                     }})
                 }});
 
@@ -252,13 +292,13 @@ def submit_vendor_form(req: SubmitFormRequest):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("""
-    INSERT INTO vendor_records (record_id, submit_time, issuing_unit, worker_count, project_name, project_location, contractor_name, owner_name, supervisor_name, hazards, sig_owner, sig_supervisor, sig_safety, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, '', '', '待職安簽核')
+    INSERT INTO vendor_records (record_id, submit_time, issuing_unit, worker_count, project_name, project_location, contractor_name, owner_name, supervisor_name, hazards, sig_owner, sig_supervisor, sig_safety, status, work_start_date, work_end_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, '', '', '待職安簽核', ?, ?)
     """, (
         record_id, submit_time, req.issuing_unit, req.worker_count,
         req.project_name, req.project_location, req.contractor_name,
         req.owner_name, json.dumps(list(FOOD_HAZARD_RULES_DB.keys()), ensure_ascii=False),
-        req.sig_owner
+        req.sig_owner, req.work_start_date, req.work_end_date
     ))
     conn.commit()
     conn.close()
@@ -279,9 +319,9 @@ def update_record(req: UpdateFormRequest):
     cursor = conn.cursor()
     cursor.execute("""
     UPDATE vendor_records 
-    SET issuing_unit = ?, worker_count = ?, contractor_name = ?, project_name = ?, project_location = ?
+    SET issuing_unit = ?, worker_count = ?, contractor_name = ?, project_name = ?, project_location = ?, work_start_date = ?, work_end_date = ?
     WHERE record_id = ?
-    """, (req.issuing_unit, req.worker_count, req.contractor_name, req.project_name, req.project_location, req.record_id))
+    """, (req.issuing_unit, req.worker_count, req.contractor_name, req.project_name, req.project_location, req.work_start_date, req.work_end_date, req.record_id))
     conn.commit()
     conn.close()
     return {"status": "success"}
@@ -335,6 +375,11 @@ def view_record_page(record_id: str):
             rules_html += "</ul>"
 
     safety_sig_html = f"<img src='{rec['sig_safety']}' class='sig-img'>" if rec.get('sig_safety') else "&nbsp;"
+    
+    # 格式化工期顯示
+    start_d = rec.get('work_start_date', '') or rec['submit_time'].split(' ')[0]
+    end_d = rec.get('work_end_date', '') or start_d
+    work_period_str = f"{start_d} 至 {end_d}" if start_d != end_d else start_d
 
     return f"""
     <!DOCTYPE html>
@@ -398,15 +443,15 @@ def view_record_page(record_id: str):
             
             <table>
                 <tr>
-                    <td width="15%"><b>回傳時間</b></td><td width="35%">{rec['submit_time']}</td>
+                    <td width="15%"><b>作業期間(工期)</b></td><td width="35%"><b style="color:#d9534f;">{work_period_str}</b></td>
                     <td width="15%"><b>簽核狀態</b></td><td width="35%"><b>{rec['status']}</b></td>
                 </tr>
                 <tr>
                     <td><b>發包單位/人員</b></td><td>{rec.get('issuing_unit', '')}</td>
-                    <td><b>作業人數</b></td><td>{rec.get('worker_count', 1)} 人</td>
+                    <td><b>填表回傳時間</b></td><td>{rec['submit_time']}</td>
                 </tr>
                 <tr>
-                    <td><b>承攬廠商</b></td><td colspan="3"><b>{rec['contractor_name']}</b></td>
+                    <td><b>承攬廠商</b></td><td colspan="3"><b>{rec['contractor_name']}</b> (作業人數：{rec.get('worker_count', 1)} 人)</td>
                 </tr>
                 <tr>
                     <td><b>作業名稱</b></td><td colspan="3"><b>{rec['project_name']}</b></td>
