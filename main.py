@@ -65,6 +65,10 @@ class UpdateFormRequest(BaseModel):
     project_location: str
 
 FOOD_HAZARD_RULES_DB = {
+    "廠區通用安全與食品衛生守則": [
+        "1. 廠區內嚴禁吸菸（含電子菸）、嚼食檳榔及飲用任何酒精性飲料。",
+        "2. 嚴禁攜帶危險物品、管制藥品或非作業必需之違禁品進入廠區。"
+    ],
     "跌倒、滑倒危害": [
         "1. 食品廠地面常有水漬或油污，施工人員應穿著防滑安全鞋。",
         "2. 施工區域周圍應設置防滑告示牌，濕滑區域應即時清理或鋪設防滑墊。"
@@ -162,7 +166,7 @@ def get_vendor_entry_page():
             
             <div class="chk-item" style="background:#e8f4f8; margin-top:8px; border-radius:6px;">
                 <input type="checkbox" id="chk_promise">
-                <label for="chk_promise"><b>我已詳閱職業安全與食品衛生(GHP)防範對策，並承諾恪守規定，若造成人員傷害或食品污染願負完全責任。</b></label>
+                <label for="chk_promise"><b>我已詳閱職業安全與食品衛生(GHP)防範對策（含嚴禁菸酒、檳榔及違禁品聲明），並承諾恪守規定，若造成人員傷害或食品污染願負完全責任。</b></label>
             </div>
 
             <div class="section-title" style="background:#007bff;">四、進場人員手寫簽章</div>
@@ -307,9 +311,6 @@ def get_records():
         records_dict[item['record_id']] = item
     return records_dict
 
-# ==============================================================================
-# 重點修復：view-record 憑證網頁 HTML/CSS 乾淨排版
-# ==============================================================================
 @app.get("/view-record/{record_id}", response_class=HTMLResponse)
 def view_record_page(record_id: str):
     conn = sqlite3.connect(DB_FILE)
@@ -328,7 +329,7 @@ def view_record_page(record_id: str):
     rules_html = ""
     for hz in rec['hazards']:
         if hz in FOOD_HAZARD_RULES_DB:
-            rules_html += f"<div style='font-weight:bold; color:#0056b3; margin-top:4px; font-size:11px;'>【{hz} 應採取之防範對策】</div><ul style='margin:1px 0 4px 0; padding-left:16px; font-size:10px; line-height:1.3;'>"
+            rules_html += f"<div style='font-weight:bold; color:#0056b3; margin-top:3px; font-size:10.5px;'>【{hz} 應採取之防範對策】</div><ul style='margin:1px 0 3px 0; padding-left:16px; font-size:9.5px; line-height:1.25;'>"
             for rule in FOOD_HAZARD_RULES_DB[hz]:
                 rules_html += f"<li>{rule}</li>"
             rules_html += "</ul>"
@@ -342,49 +343,47 @@ def view_record_page(record_id: str):
         <meta charset="utf-8">
         <title>蘭揚食品危害告知書 - 稽核憑證</title>
         <style>
-            @page {{ size: A4; margin: 10mm; }}
+            @page {{ size: A4; margin: 8mm; }}
             * {{ box-sizing: border-box; font-family: "Microsoft JhengHei", "微軟正黑體", sans-serif; }}
             
-            /* 清除背景定位與多餘屬性 */
             html, body {{ background: #f0f2f5; margin: 0; padding: 0; }}
-            body {{ padding: 10px; margin: auto; max-width: 780px; color: #333; }}
+            body {{ padding: 10px; margin: auto; max-width: 750px; color: #333; }}
             
-            /* 主容器：採用標準 block 排版，高度自由流動 */
-            .paper {{ background: white; padding: 20px 25px; border-radius: 6px; border: 1px solid #ccc; display: block; }}
+            .paper {{ background: white; padding: 15px 20px; border-radius: 6px; border: 1px solid #ccc; display: block; }}
             
-            h1 {{ text-align: center; font-size: 18px; color: #1a365d; border-bottom: 2px solid #28a745; padding-bottom: 6px; margin: 0 0 12px 0; }}
+            h1 {{ text-align: center; font-size: 17px; color: #1a365d; border-bottom: 2px solid #28a745; padding-bottom: 4px; margin: 0 0 8px 0; }}
             
-            table {{ width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 11px; }}
-            td, th {{ border: 1px solid #333; padding: 5px 8px; vertical-align: middle; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 10.5px; clear: both; }}
+            td, th {{ border: 1px solid #333; padding: 4px 6px; vertical-align: middle; }}
             th {{ background: #e2e8f0; font-weight: bold; text-align: left; }}
             
-            .tag {{ display: inline-block; background: #28a745; color: white; padding: 2px 6px; border-radius: 3px; margin: 1px; font-size: 10px; }}
-            .sig-img {{ height: 50px; max-width: 100%; object-fit: contain; display: block; margin: auto; }}
+            .tag {{ display: inline-block; background: #28a745; color: white; padding: 1px 5px; border-radius: 3px; margin: 1px; font-size: 9.5px; }}
+            .sig-img {{ height: 45px; max-width: 100%; object-fit: contain; display: block; margin: auto; }}
             
-            /* 中間條文框：明確取消 position: absolute 與 overflow 固定 */
             .rules-box {{ 
                 border: 1px solid #ccc; 
-                padding: 8px 12px; 
+                padding: 6px 10px; 
                 background: #fafafa; 
                 border-radius: 4px; 
-                margin-top: 6px; 
-                margin-bottom: 25px; 
+                margin-top: 4px; 
+                margin-bottom: 12px; 
                 display: block; 
-                position: static !important; 
+                height: auto !important; 
+                max-height: none !important; 
+                overflow: visible !important;
                 clear: both;
             }}
             
-            /* 標題段落：給予足夠頂部間距，絕不上疊 */
             .section-title-h3 {{ 
-                margin-top: 20px !important; 
-                margin-bottom: 6px !important; 
-                font-size: 12px; 
+                margin-top: 12px !important; 
+                margin-bottom: 4px !important; 
+                font-size: 11.5px; 
                 font-weight: bold; 
                 display: block; 
                 clear: both; 
             }}
             
-            .print-btn {{ display: block; width: 100%; padding: 10px; background: #28a745; color: white; border: none; font-size: 14px; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 20px; text-align: center; }}
+            .print-btn {{ display: block; width: 100%; padding: 8px; background: #28a745; color: white; border: none; font-size: 13px; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 12px; text-align: center; }}
             
             @media print {{ 
                 .print-btn {{ display: none !important; }} 
@@ -435,11 +434,11 @@ def view_record_page(record_id: str):
                     <th width="50%" style="background:#d4edda;">2. 廠方職安簽核</th>
                 </tr>
                 <tr>
-                    <td align="center" style="height: 70px;">
-                        <div style="font-size: 11px; margin-bottom: 2px;"><b>{rec['owner_name']}</b></div>
+                    <td align="center" style="height: 60px;">
+                        <div style="font-size: 10.5px; margin-bottom: 2px;"><b>{rec['owner_name']}</b></div>
                         <img src="{rec['sig_owner']}" class="sig-img">
                     </td>
-                    <td align="center" style="background:#f8f9fa; height: 70px;">
+                    <td align="center" style="background:#f8f9fa; height: 60px;">
                         {safety_sig_html}
                     </td>
                 </tr>
