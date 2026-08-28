@@ -307,6 +307,9 @@ def get_records():
         records_dict[item['record_id']] = item
     return records_dict
 
+# ==============================================================================
+# 重點修復：view-record 憑證網頁 HTML/CSS 乾淨排版
+# ==============================================================================
 @app.get("/view-record/{record_id}", response_class=HTMLResponse)
 def view_record_page(record_id: str):
     conn = sqlite3.connect(DB_FILE)
@@ -325,9 +328,9 @@ def view_record_page(record_id: str):
     rules_html = ""
     for hz in rec['hazards']:
         if hz in FOOD_HAZARD_RULES_DB:
-            rules_html += f"<div style='font-weight:bold; color:#0056b3; margin-top:6px;'>【{hz} 應採取之防範對策】</div><ul style='margin:2px 0 6px 0; padding-left:18px;'>"
+            rules_html += f"<div style='font-weight:bold; color:#0056b3; margin-top:4px; font-size:11px;'>【{hz} 應採取之防範對策】</div><ul style='margin:1px 0 4px 0; padding-left:16px; font-size:10px; line-height:1.3;'>"
             for rule in FOOD_HAZARD_RULES_DB[hz]:
-                rules_html += f"<li style='margin-bottom:2px;'>{rule}</li>"
+                rules_html += f"<li>{rule}</li>"
             rules_html += "</ul>"
 
     safety_sig_html = f"<img src='{rec['sig_safety']}' class='sig-img'>" if rec.get('sig_safety') else "&nbsp;"
@@ -341,26 +344,48 @@ def view_record_page(record_id: str):
         <style>
             @page {{ size: A4; margin: 10mm; }}
             * {{ box-sizing: border-box; font-family: "Microsoft JhengHei", "微軟正黑體", sans-serif; }}
-            body {{ padding: 0; margin: auto; max-width: 750px; background: #f0f2f5; color: #333; font-size: 11px; }}
             
-            /* 清除固定高度限制，改用自然流式排版 */
-            .paper {{ background: white; padding: 20px 25px; border-radius: 6px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); border: 1px solid #ccc; display: block; clear: both; }}
-            h1 {{ text-align: center; font-size: 18px; color: #1a365d; border-bottom: 2px solid #28a745; padding-bottom: 6px; margin: 0 0 10px 0; }}
+            /* 清除背景定位與多餘屬性 */
+            html, body {{ background: #f0f2f5; margin: 0; padding: 0; }}
+            body {{ padding: 10px; margin: auto; max-width: 780px; color: #333; }}
             
-            table {{ width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 11px; clear: both; }}
+            /* 主容器：採用標準 block 排版，高度自由流動 */
+            .paper {{ background: white; padding: 20px 25px; border-radius: 6px; border: 1px solid #ccc; display: block; }}
+            
+            h1 {{ text-align: center; font-size: 18px; color: #1a365d; border-bottom: 2px solid #28a745; padding-bottom: 6px; margin: 0 0 12px 0; }}
+            
+            table {{ width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 11px; }}
             td, th {{ border: 1px solid #333; padding: 5px 8px; vertical-align: middle; }}
             th {{ background: #e2e8f0; font-weight: bold; text-align: left; }}
             
             .tag {{ display: inline-block; background: #28a745; color: white; padding: 2px 6px; border-radius: 3px; margin: 1px; font-size: 10px; }}
             .sig-img {{ height: 50px; max-width: 100%; object-fit: contain; display: block; margin: auto; }}
             
-            /* 中間條文框：移除高度鎖定與絕對定位，改為自然向下延伸 */
-            .rules-box {{ border: 1px solid #ccc; padding: 8px 12px; font-size: 10.5px; line-height: 1.4; background: #fafafa; border-radius: 4px; margin-top: 6px; margin-bottom: 15px; display: block; position: relative; clear: both; }}
+            /* 中間條文框：明確取消 position: absolute 與 overflow 固定 */
+            .rules-box {{ 
+                border: 1px solid #ccc; 
+                padding: 8px 12px; 
+                background: #fafafa; 
+                border-radius: 4px; 
+                margin-top: 6px; 
+                margin-bottom: 25px; 
+                display: block; 
+                position: static !important; 
+                clear: both;
+            }}
             
-            /* 簽名區標題：加入足夠的間距，確保絕不重疊 */
-            .section-h3 {{ margin-top: 15px; margin-bottom: 6px; font-size: 12px; font-weight: bold; display: block; clear: both; }}
+            /* 標題段落：給予足夠頂部間距，絕不上疊 */
+            .section-title-h3 {{ 
+                margin-top: 20px !important; 
+                margin-bottom: 6px !important; 
+                font-size: 12px; 
+                font-weight: bold; 
+                display: block; 
+                clear: both; 
+            }}
             
             .print-btn {{ display: block; width: 100%; padding: 10px; background: #28a745; color: white; border: none; font-size: 14px; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 20px; text-align: center; }}
+            
             @media print {{ 
                 .print-btn {{ display: none !important; }} 
                 body {{ background: white; padding: 0; margin: 0; max-width: 100%; }} 
@@ -398,12 +423,12 @@ def view_record_page(record_id: str):
                 </tr>
             </table>
 
-            <div class="section-h3" style="color:#0056b3;">工安與食品衛生(GHP)對策 (已詳閱同意)</div>
+            <div class="section-title-h3" style="color:#0056b3;">工安與食品衛生(GHP)對策 (已詳閱同意)</div>
             <div class="rules-box">
                 {rules_html}
             </div>
 
-            <div class="section-h3" style="color:#28a745;">雙方簽署審核留痕</div>
+            <div class="section-title-h3" style="color:#28a745;">雙方簽署審核留痕</div>
             <table>
                 <tr>
                     <th width="50%">1. 承攬人經營負責人或代理人 簽章</th>
